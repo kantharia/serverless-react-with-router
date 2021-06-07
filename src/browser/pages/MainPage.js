@@ -1,4 +1,5 @@
 import React from "react";
+import Helmet from "react-helmet";
 
 import useConfig from "../../components/useConfig";
 import logo from "../logo.svg";

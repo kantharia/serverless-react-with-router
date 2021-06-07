@@ -35,5 +35,5 @@ export default async function render(event: APIGatewayEvent): Promise<string> {
       </StaticRouter>
     </ConfigContext.Provider>,
   );
-  return html({ stats, content, config });
+  return html({ stats, content, config, event });
 }

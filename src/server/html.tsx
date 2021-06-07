@@ -6,7 +6,17 @@ import { Stats } from "./types";
  * application code into before sending it to the client as regular HTML.
  * Note we're returning a template string from this function.
  */
-const html = ({ stats, content, config }: { stats: Stats; content: string; config: Config }): string => `<!DOCTYPE html>
+const html = ({ stats, content, config, event }: { stats: Stats; content: string; config: Config, event: any }): string => {
+
+  console.log("HTML : ");
+  // console.log("STATS : ", stats);
+  // console.log("CONTENT : ", content);
+  // console.log("CONFIG : ", config);
+  console.log("Host : ", event.headers.Host);
+  console.log("Path : ", event.path);
+
+
+  return `<!DOCTYPE html>
   <html lang="en">
     <head>
       <meta charset="utf-8" />
@@ -24,6 +34,6 @@ const html = ({ stats, content, config }: { stats: Stats; content: string; confi
       <div id="root">${content}</div>
       <script src="${config.app.DIST_URL}/${stats.main}"></script>
     </body>
-  </html>`;
+  </html>`};
 
 export default html;

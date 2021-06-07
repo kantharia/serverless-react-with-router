@@ -6,6 +6,7 @@ import { Route, Switch } from "react-router-dom";
 import useConfig from "../components/useConfig";
 import MainPage from "./pages/MainPage";
 import ErrorPage from "./pages/ErrorPage";
+import CustomMessagePage from "./pages/CustomMessagePage";
 
 /**
  * Our Web Application
@@ -16,6 +17,9 @@ export default function App() {
     <Switch>
       <Route exact path="/">
         <MainPage />
+      </Route>
+      <Route path="/custom-message">
+        <CustomMessagePage />
       </Route>
       <Route>
         <ErrorPage />
