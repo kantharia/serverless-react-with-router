@@ -5,9 +5,24 @@ const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 
 const isOffline = !!process.env.IS_OFFLINE;
 
+const babelOptions = {
+  // Don't use .babelrc here but web browser optimized settings
+  presets: [
+    [
+      "@babel/preset-env",
+      {
+        targets: { browsers: ["last 2 versions"] },
+        // debug: isOffline,
+      },
+    ],
+    "@babel/preset-typescript",
+    "@babel/preset-react",
+  ],
+};
+
 module.exports = {
   entry: {
-    main: path.join(__dirname, "src/browser/index.jsx"),
+    main: path.join(__dirname, "src/browser/index.tsx"),
   },
   target: "web",
   mode: isOffline ? "development" : "production",
@@ -40,8 +55,6 @@ module.exports = {
           null,
           2,
         );
-        console.log("ASSETS =>", assets);
-        console.log("STATS =>", stats);
         return stats;
       },
     }),
@@ -54,30 +67,26 @@ module.exports = {
         use: [
           {
             loader: "babel-loader",
-            options: {
-              // Don't use .babelrc here but web browser optimized settings
-              presets: [
-                [
-                  "@babel/preset-env",
-                  {
-                    targets: { browsers: ["last 2 versions"] },
-                    // debug: isOffline,
-                  },
-                ],
-                "@babel/preset-react",
-              ],
-            },
+            options: babelOptions,
+          },
+        ],
+      },
+      {
+        test: /\.ts(x?)$/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: "babel-loader",
+            options: babelOptions,
+          },
+          {
+            loader: "ts-loader",
           },
         ],
       },
       {
         test: /\.css$/,
-        use: [
-          {
-            loader: MiniCssExtractPlugin.loader,
-          },
-          "css-loader",
-        ],
+        use: [MiniCssExtractPlugin.loader, "css-loader"],
       },
       {
         test: /\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$/,
@@ -86,7 +95,7 @@ module.exports = {
     ],
   },
   resolve: {
-    extensions: [".js", ".jsx"],
+    extensions: [".ts", ".tsx", ".js", ".jsx"],
   },
   output: {
     path: path.join(__dirname, "dist"),

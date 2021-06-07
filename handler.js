@@ -7,6 +7,6 @@ export const serve = async (event, context) => {
     headers: {
       "Content-Type": "text/html",
     },
-    body: await render(),
+    body: await render(event),
   };
 };
