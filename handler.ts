@@ -3,6 +3,7 @@ import render from "./src/server/render";
 import { Context, APIGatewayEvent, APIGatewayProxyResultV2 } from "aws-lambda";
 
 export const serve = async (event: APIGatewayEvent, context: Context): Promise<APIGatewayProxyResultV2> => {
+  console.log("Got 1 Request");
   return {
     statusCode: 200,
     headers: {
