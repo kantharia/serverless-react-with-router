@@ -1,0 +1,261 @@
+---
+service: serverless-react-boilerplate
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 6
+  logRetentionInDays: 7
+
+  environment:
+    SERVERLESS_PROJECT: ${self:service}
+    SERVERLESS_REGION: ${self:provider.region}
+    SERVERLESS_STAGE: ${self:provider.stage}
+
+    APP_DIST_URL:
+      Fn::Join:
+        - ''
+        - - https://s3.amazonaws.com/
+          - Ref: DistBucket
+    APP_PUBLIC_URL:
+      Fn::Join:
+        - ''
+        - - https://s3.amazonaws.com/
+          - Ref: DistBucket
+    APIGATEWAY_URL:
+      Fn::Join:
+        - ''
+        - - https://
+          - Ref: ApiGatewayRestApi
+          - .execute-api.
+          - Ref: AWS::Region
+          - .amazonaws.com/
+          - ${self:provider.stage}
+    COGNITO_USER_POOL_ID:
+      Ref: UserPool
+    COGNITO_USER_POOL_CLIENT_ID:
+      Ref: UserPoolClient
+    COGNITO_IDENTITY_POOL_ID:
+      Ref: IdentityPool
+
+plugins:
+  - serverless-webpack
+  - serverless-export-env
+  - serverless-plugin-scripts
+  - serverless-offline
+  - serverless-s3-deploy
+
+functions:
+  serve:
+    # Any web request regardless of path or method will be handled by a single Lambda function
+    handler: handler.serve
+    events:
+      - http:
+          path: /
+          method: any
+          cors: true
+      - http:
+          path: /{any+}
+          method: any
+          cors: true
+
+custom:
+  scripts:
+    hooks:
+      # Build the client-side script before packaging backend code
+      package:initialize: 'npm run build:client'
+
+  webpack:
+    webpackConfig: 'webpack.server.config.js'
+
+  assets:
+    # Automatically copy public folder and distribution to S3
+    auto: true
+    targets:
+      - bucket:
+          Ref: DistBucket
+        acl: public-read
+        files:
+          - source: public/
+            globs:
+              - '**/*'
+          - source: dist/
+            headers:
+              CacheControl: max-age=31104000 # 1 year
+            globs:
+              - '**/*.js'
+              - '**/*.css'
+              - '**/*.map'
+
+resources:
+  Resources:
+
+    # Customize the API Gateway resource
+    ApiGatewayRestApi:
+      Type: AWS::ApiGateway::RestApi
+      Properties:
+        # Enable gzip compression
+        MinimumCompressionSize: 1000
+
+    # S3 Bucket for the distribution bundles
+    DistBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Delete
+
+    # Creates a user pool in cognito for your app to auth against
+    UserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UsernameAttributes:
+          - email
+        AutoVerifiedAttributes:
+          # - phone_number
+          - email
+        # MfaConfiguration: "ON"
+        # SmsConfiguration:
+        #   ExternalId: !Sub ${AuthName}-external
+        #   SnsCallerArn: !GetAtt SNSRole.Arn
+        Schema:
+          # - Name: name
+          #   AttributeDataType: String
+          #   Mutable: true
+          #   Required: true
+          - Name: email
+            AttributeDataType: String
+            Mutable: false
+            Required: true
+          # - Name: phone_number
+          #   AttributeDataType: String
+          #   Mutable: false
+          #   Required: true
+          # - Name: slackId
+          #   AttributeDataType: String
+          #   Mutable: true
+
+    # Creates a User Pool Client to be used by the identity pool
+    UserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        GenerateSecret: false
+        UserPoolId:
+          Ref: UserPool
+
+    # Creates a federeated Identity pool
+    IdentityPool:
+      Type: AWS::Cognito::IdentityPool
+      Properties:
+        AllowUnauthenticatedIdentities: true
+        CognitoIdentityProviders:
+          - ClientId:
+              Ref: UserPoolClient
+            ProviderName:
+              Fn::GetAtt: UserPool.ProviderName
+
+    # Create a role for unauthorized acces to AWS resources. Very limited access.
+    # Only allows users in the previously created Identity Pool
+    CognitoUnAuthorizedRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Federated: "cognito-identity.amazonaws.com"
+              Action:
+                - "sts:AssumeRoleWithWebIdentity"
+              Condition:
+                StringEquals:
+                  "cognito-identity.amazonaws.com:aud":
+                    Ref: IdentityPool
+                "ForAnyValue:StringLike":
+                  "cognito-identity.amazonaws.com:amr": unauthenticated
+        Policies:
+          - PolicyName: CognitoUnauthorizedPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "mobileanalytics:PutEvents"
+                    - "cognito-sync:*"
+                  Resource: "*"
+
+    # Create a role for authorized acces to AWS resources. Control what your user can access.
+    # This example only allows Lambda invokation
+    # Only allows users in the previously created Identity Pool
+    CognitoAuthorizedRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Federated: "cognito-identity.amazonaws.com"
+              Action:
+                - "sts:AssumeRoleWithWebIdentity"
+              Condition:
+                StringEquals:
+                  "cognito-identity.amazonaws.com:aud":
+                    Ref: IdentityPool
+                "ForAnyValue:StringLike":
+                  "cognito-identity.amazonaws.com:amr": authenticated
+        Policies:
+          - PolicyName: CognitoAuthorizedPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "mobileanalytics:PutEvents"
+                    - "cognito-sync:*"
+                    - "cognito-identity:*"
+                  Resource: "*"
+                - Effect: Allow
+                  Action:
+                    - "lambda:InvokeFunction"
+                  Resource: "*"
+  
+    # Assigns the roles to the Identity Pool
+    IdentityPoolRoleMapping:
+      Type: AWS::Cognito::IdentityPoolRoleAttachment
+      Properties:
+        IdentityPoolId:
+          Ref: IdentityPool
+        Roles:
+          authenticated:
+            Fn::GetAtt: CognitoAuthorizedRole.Arn
+          unauthenticated:
+            Fn::GetAtt: CognitoUnAuthorizedRole.Arn
+
+  Outputs:
+    ApiGatewayRestApi:
+      Description: API Gateway Endpoint
+      Value:
+        Ref: ApiGatewayRestApi
+    DistBucket:
+      Description: Distribution S3 Bucket
+      Value:
+        Ref: DistBucket
+    UserPoolId:
+      Description: User Pool ID
+      Value:
+        Ref: UserPool
+      Export:
+        Name: UserPool::Id
+    UserPoolClientId:
+      Description: User Pool Client ID
+      Value:
+        Ref: UserPoolClient
+      Export:
+        Name: UserPoolClient::Id
+    IdentityPoolId:
+      Description: Identity Pool ID
+      Value:
+        Ref: IdentityPool
+      Export:
+        Name: IdentityPool::Id
